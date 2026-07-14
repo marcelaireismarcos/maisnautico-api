@@ -17,7 +17,7 @@ const parser = new Parser({
   },
 });
 
-// ─── Fontes ───────────────────────────────────────────────────
+// ─── Fontes RSS ────────────────────────────────────────────────
 const SOURCES = [
   {
     name:   'Náutico',
@@ -53,10 +53,10 @@ const SOURCES = [
 
 const KEYWORDS = ['náutico', 'nautico', 'timbu', 'capibaribe', 'série b', 'serie b'];
 
-// ─── fetchAll ─────────────────────────────────────────────────
+// ─── fetchAll ──────────────────────────────────────────────────
 async function fetchAll() {
+  // 1. Busca todos os feeds RSS
   const results = await Promise.allSettled(SOURCES.map(s => fetchOne(s)));
-
   const items = [];
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') {
@@ -67,18 +67,20 @@ async function fetchAll() {
     }
   });
 
-  // Busca imagens em paralelo para itens sem imagem (máx 10 por vez)
-  const withoutImage = items.filter(i => !i.image).slice(0, 15);
-  if (withoutImage.length > 0) {
-    console.log(`  Buscando imagens para ${withoutImage.length} itens...`);
-    await Promise.allSettled(
-      withoutImage.map(item => fetchOgImage(item))
-    );
+  // 2. Para itens sem imagem, busca og:image seguindo redirecionamentos
+  const semImagem = items.filter(i => !i.image);
+  if (semImagem.length > 0) {
+    console.log(`  Buscando imagens para ${semImagem.length} itens...`);
+    // Limita a 20 requisições paralelas para não sobrecarregar
+    await processInBatches(semImagem, 20, item => fetchOgImage(item));
+    const comImagem = items.filter(i => i.image).length;
+    console.log(`  Imagens encontradas: ${comImagem}/${items.length}`);
   }
 
   return items;
 }
 
+// ─── Parse de um feed RSS ──────────────────────────────────────
 async function fetchOne(source) {
   const feed  = await parser.parseURL(source.url);
   const items = [];
@@ -90,7 +92,7 @@ async function fetchOne(source) {
     const combined = rawTitle + ' ' + (entry.contentSnippet || '');
     if (source.filter && !isRelevant(combined)) continue;
 
-    // Google News embute o nome da fonte no título: "Título - Fonte"
+    // Google News: "Título - Nome da Fonte"
     let title      = rawTitle;
     let sourceName = source.name;
     if (rawTitle.includes(' - ')) {
@@ -103,7 +105,7 @@ async function fetchOne(source) {
       title,
       link:        entry.link || entry.guid || '',
       description: cleanHtml(entry.contentSnippet || ''),
-      image:       extractImageFromEntry(entry),
+      image:       extractImageFromEntry(entry), // tenta pegar do RSS primeiro
       date:        entry.isoDate || null,
       source:      sourceName,
       color:       source.color,
@@ -113,57 +115,120 @@ async function fetchOne(source) {
   return items;
 }
 
-/**
- * Busca a imagem og:image da página do artigo.
- * Modifica o item diretamente (in-place).
- */
+// ─── Busca og:image da página do artigo ───────────────────────
 async function fetchOgImage(item) {
   if (!item.link) return;
   try {
-    const html = await fetchPageHtml(item.link, 3000);
-    // og:image é a mais confiável
-    let m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
-    if (!m) m = html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-    if (m && m[1] && !m[1].startsWith('data:')) {
-      item.image = m[1];
-    }
+    // Passo 1: resolve URL real (Google News redireciona)
+    const realUrl = await resolveRedirects(item.link, 5);
+    if (!realUrl) return;
+
+    // Passo 2: pega os primeiros 10KB da página
+    const html = await fetchHead(realUrl, 10000, 6000);
+    if (!html) return;
+
+    // Passo 3: extrai og:image
+    const image = extractOgImage(html);
+    if (image) item.image = image;
+
   } catch (_) {
-    // silencioso — sem imagem é ok
+    // silencioso
   }
 }
 
 /**
- * Faz um GET simples e retorna os primeiros 8KB do HTML.
- * Suficiente para encontrar as meta tags no <head>.
+ * Segue redirecionamentos HTTP fazendo apenas HEAD requests.
+ * Retorna a URL final (após todos os redirects).
  */
-function fetchPageHtml(url, timeout) {
-  return new Promise((resolve, reject) => {
+function resolveRedirects(url, maxRedirects) {
+  return new Promise((resolve) => {
+    if (maxRedirects <= 0) return resolve(url);
+
+    const lib = url.startsWith('https') ? https : http;
+    const req = lib.request(url, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MaisNauticoBot/1.0)',
+      },
+      timeout: 5000,
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        const next = res.headers.location.startsWith('http')
+          ? res.headers.location
+          : new URL(res.headers.location, url).href;
+        resolve(resolveRedirects(next, maxRedirects - 1));
+      } else {
+        resolve(url);
+      }
+    });
+    req.on('error', () => resolve(url));
+    req.on('timeout', () => { req.destroy(); resolve(url); });
+    req.end();
+  });
+}
+
+/**
+ * Faz GET e retorna os primeiros `maxBytes` bytes do HTML.
+ */
+function fetchHead(url, maxBytes, timeout) {
+  return new Promise((resolve) => {
     const lib = url.startsWith('https') ? https : http;
     const req = lib.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; MaisNauticoBot/1.0)',
-        'Accept': 'text/html',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
       },
       timeout,
     }, (res) => {
-      // Segue redirecionamentos simples
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return fetchPageHtml(res.headers.location, timeout).then(resolve).catch(reject);
+        req.destroy();
+        return resolve(fetchHead(res.headers.location, maxBytes, timeout));
       }
       let data = '';
       res.on('data', chunk => {
         data += chunk;
-        // Para de ler após 8KB — o <head> está lá
-        if (data.length > 8192) {
+        if (data.length >= maxBytes) {
           req.destroy();
           resolve(data);
         }
       });
       res.on('end', () => resolve(data));
+      res.on('error', () => resolve(null));
     });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
   });
+}
+
+/**
+ * Extrai og:image, twitter:image ou primeira <img> relevante do HTML.
+ */
+function extractOgImage(html) {
+  if (!html) return null;
+
+  // og:image (mais confiável)
+  let m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  if (m && isValidImage(m[1])) return m[1];
+
+  // twitter:image
+  m = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+  if (m && isValidImage(m[1])) return m[1];
+
+  // Primeira <img> com src razoável (>= 200x200 pelo src — heurística)
+  m = html.match(/<img[^>]+src=["'](https?:\/\/[^"']+\.(jpg|jpeg|png|webp)[^"']*)["']/i);
+  if (m && isValidImage(m[1])) return m[1];
+
+  return null;
+}
+
+function isValidImage(url) {
+  if (!url) return false;
+  if (url.startsWith('data:')) return false;
+  if (url.includes('logo') && url.includes('1x1')) return false;
+  return url.startsWith('http');
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -171,7 +236,6 @@ function extractImageFromEntry(entry) {
   if (entry.mediaContent?.$?.url)   return entry.mediaContent.$.url;
   if (entry.mediaThumbnail?.$?.url) return entry.mediaThumbnail.$.url;
   if (entry.enclosure?.url)         return entry.enclosure.url;
-
   const html = entry['content:encoded'] || entry.content || '';
   const m    = html.match(/<img[^>]+src=["']([^"']+)["']/i);
   return m ? m[1] : null;
@@ -184,6 +248,16 @@ function isRelevant(text) {
 
 function cleanHtml(text) {
   return text.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Processa um array em lotes de `batchSize` em paralelo.
+ */
+async function processInBatches(items, batchSize, fn) {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await Promise.allSettled(batch.map(fn));
+  }
 }
 
 module.exports = { fetchAll };
