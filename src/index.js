@@ -1,102 +1,57 @@
-/**
- * Mais Náutico — API Server
- *
- * Servidor Node.js que agrega notícias do Náutico Capibaribe
- * de múltiplas fontes e expõe uma API JSON para o app Android.
- *
- * Endpoints:
- *   GET /noticias          → lista de notícias agregadas e ordenadas por data
- *   GET /noticias?limit=N  → limita a N notícias (padrão: 50)
- *   GET /health            → status do servidor
- */
-
-const express  = require('express');
-const cors     = require('cors');
+const express   = require('express');
+const cors      = require('cors');
 const NodeCache = require('node-cache');
-
-const rssFetcher       = require('./fetchers/rssFetcher');
-const puppeteerFetcher = require('./fetchers/puppeteerFetcher');
+const rssFetcher = require('./fetchers/rssFetcher');
 
 const app   = express();
-const cache = new NodeCache({ stdTTL: 900 }); // cache de 15 minutos
+const cache = new NodeCache({ stdTTL: 600 }); // cache 10 minutos
 
-// ─── Middleware ────────────────────────────────────────────────
 app.use(cors());
-app.use(express.json());
 
-// ─── Health check ──────────────────────────────────────────────
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ─── Endpoint principal ────────────────────────────────────────
+// Endpoint de notícias
 app.get('/noticias', async (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  const cacheKey = 'noticias';
+  const limit = Math.min(parseInt(req.query.limit) || 50, 100);
 
-  // Retorna do cache se disponível
-  const cached = cache.get(cacheKey);
+  const cached = cache.get('noticias');
   if (cached) {
-    console.log(`[cache HIT] ${cached.length} notícias`);
+    console.log(`[cache] ${cached.length} itens`);
     return res.json(cached.slice(0, limit));
   }
 
-  console.log('[cache MISS] buscando notícias...');
-
   try {
-    // Busca RSS (rápido) e Puppeteer (lento) em paralelo
-    const [rssItems, puppeteerItems] = await Promise.allSettled([
-      rssFetcher.fetchAll(),
-      puppeteerFetcher.fetchAll(),
-    ]);
+    const items = await rssFetcher.fetchAll();
 
-    let allItems = [];
-
-    if (rssItems.status === 'fulfilled') {
-      console.log(`RSS: ${rssItems.value.length} itens`);
-      allItems = allItems.concat(rssItems.value);
-    } else {
-      console.error('RSS falhou:', rssItems.reason?.message);
-    }
-
-    if (puppeteerItems.status === 'fulfilled') {
-      console.log(`Puppeteer: ${puppeteerItems.value.length} itens`);
-      allItems = allItems.concat(puppeteerItems.value);
-    } else {
-      console.error('Puppeteer falhou:', puppeteerItems.reason?.message);
-    }
-
-    // Remove duplicatas por link
-    const seen  = new Set();
-    const unique = allItems.filter(item => {
+    // Deduplica por link
+    const seen   = new Set();
+    const unique = items.filter(item => {
       if (!item.link || seen.has(item.link)) return false;
       seen.add(item.link);
       return true;
     });
 
-    // Ordena por data — mais recente primeiro
+    // Ordena por data
     unique.sort((a, b) => {
-      if (!a.date && !b.date) return 0;
       if (!a.date) return 1;
       if (!b.date) return -1;
       return new Date(b.date) - new Date(a.date);
     });
 
-    console.log(`Total: ${unique.length} notícias únicas`);
-
-    // Salva no cache
-    cache.set(cacheKey, unique);
-
+    cache.set('noticias', unique);
+    console.log(`[ok] ${unique.length} notícias`);
     res.json(unique.slice(0, limit));
 
-  } catch (error) {
-    console.error('Erro geral:', error.message);
-    res.status(500).json({ error: 'Erro ao buscar notícias', detail: error.message });
+  } catch (err) {
+    console.error('[erro]', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ─── Start ─────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Mais Náutico API rodando na porta ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Mais Náutico API na porta ${PORT}`);
 });
