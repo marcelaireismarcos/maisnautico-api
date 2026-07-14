@@ -118,19 +118,23 @@ async function fetchAll() {
     }
   });
 
-  // Para fontes diretas (não Google News) com logo de fallback,
-  // tenta buscar a imagem real da página do artigo
-  const candidatos = items.filter(i =>
-    i.image &&
-    (i.image.includes('favicon') || i.image.includes('Nautico.svg')) &&
+  // Busca og:image para todos os itens que:
+  // 1. Têm apenas logo/fallback como imagem (favicon, svg do Náutico, logo GE)
+  // 2. Têm link real (não google.com)
+  const FALLBACK_PATTERNS = ['favicon', 'Nautico.svg', 'ge_logo', 'lance.com.br/favicon'];
+  const needsImage = items.filter(i =>
     i.link &&
-    !i.link.includes('google.com')
+    !i.link.includes('google.com') &&
+    (!i.image || FALLBACK_PATTERNS.some(p => i.image.includes(p)))
   );
 
-  if (candidatos.length > 0) {
-    console.log(`  Melhorando imagens para ${candidatos.length} itens...`);
-    await processInBatches(candidatos, 8, item => fetchOgImage(item));
-    console.log(`  Com imagem real: ${items.filter(i => i.image && !i.image.includes('favicon') && !i.image.includes('Nautico.svg')).length}/${items.length}`);
+  if (needsImage.length > 0) {
+    console.log(`  Buscando og:image para ${needsImage.length} itens com link real...`);
+    await processInBatches(needsImage, 8, item => fetchOgImage(item));
+    const withRealImage = items.filter(i =>
+      i.image && !FALLBACK_PATTERNS.some(p => i.image.includes(p))
+    ).length;
+    console.log(`  Com imagem real: ${withRealImage}/${items.length}`);
   }
 
   return items;
@@ -157,12 +161,11 @@ async function fetchOne(source) {
       sourceName = rawTitle.substring(idx + 3).trim();
     }
 
-    // Para Google News: o <link> é uma URL do Google — tentamos extrair
-    // a URL real a partir do campo source.url ou do conteúdo do item
+    // Para Google News: decodifica a URL real do token base64
     let link = entry.link || entry.guid || '';
     if (source.isGoogleNews) {
-      const realUrl = extractRealUrlFromGoogleNews(entry);
-      if (realUrl) link = realUrl;
+      const decoded = decodeGoogleNewsUrl(link);
+      if (decoded) link = decoded;
     }
 
     // Tenta pegar imagem do RSS; se não tiver, usa logo do veículo
@@ -183,31 +186,64 @@ async function fetchOne(source) {
 }
 
 /**
- * O Google News RSS inclui a URL real do artigo no campo <source url="...">.
- * Isso é muito mais confiável que tentar seguir o link do Google.
+ * Decodifica o link real do Google News a partir do token base64 no item.
+ * Os links do Google News têm formato: CBMi[BASE64_URL]
+ * O BASE64 contém a URL real do artigo.
  */
-function extractRealUrlFromGoogleNews(entry) {
-  // Opção 1: campo source com atributo url
-  if (entry['source'] && typeof entry['source'] === 'object') {
-    const url = entry['source']['$']?.url || entry['source']?.url;
-    if (url && url.startsWith('http') && !url.includes('google.com')) return url;
-  }
+function decodeGoogleNewsUrl(googleUrl) {
+  if (!googleUrl || !googleUrl.includes('news.google.com')) return null;
+  try {
+    // Extrai o token do path: /rss/articles/TOKEN ou /articles/TOKEN
+    const match = googleUrl.match(/articles\/([A-Za-z0-9_-]+)/);
+    if (!match) return null;
 
-  // Opção 2: campo origin
-  if (entry.origin?.href && !entry.origin.href.includes('google.com')) {
-    return entry.origin.href;
-  }
+    const token = match[1];
+    // O token começa com CBMi — os bytes seguintes são a URL em base64
+    // Formato: 0A + length_byte + URL_bytes
+    // Decodifica base64url para buffer
+    const base64 = token
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+    const buf = Buffer.from(base64, 'base64');
 
-  // Opção 3: dentro do conteúdo do item procura um link externo
-  const content = entry['content:encoded'] || entry.content || entry.summary || '';
-  const m = content.match(/href=["'](https?:\/\/(?!news\.google)[^"']+)["']/i);
-  if (m) return m[1];
-
+    // Procura por http dentro do buffer
+    const str = buf.toString('utf8');
+    const urlMatch = str.match(/(https?:\/\/[^\x00-\x1f\s"<>]+)/);
+    if (urlMatch) return urlMatch[1];
+  } catch (_) {}
   return null;
+}
+
+/**
+ * Segue redirecionamentos HTTP fazendo apenas HEAD requests.
+ * Retorna a URL final (após todos os redirects).
+ */
+function resolveRedirects(url, maxRedirects) {
+  return new Promise((resolve) => {
+    if (maxRedirects <= 0) return resolve(url);
+    const lib = url.startsWith('https') ? https : http;
+    const req = lib.request(url, {
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MaisNauticoBot/1.0)' },
+      timeout: 5000,
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        const next = res.headers.location.startsWith('http')
+          ? res.headers.location
+          : new URL(res.headers.location, url).href;
+        return resolve(resolveRedirects(next, maxRedirects - 1));
+      }
+      resolve(url);
+    });
+    req.on('error', () => resolve(url));
+    req.on('timeout', () => { req.destroy(); resolve(url); });
+    req.end();
+  });
 }
 
 // ─── Busca og:image da URL real ────────────────────────────────
 async function fetchOgImage(item) {
+  // Só tenta buscar se o link já é uma URL real (não Google News)
   if (!item.link || item.link.includes('google.com')) return;
   try {
     const html = await fetchHead(item.link, 12000, 8000);
