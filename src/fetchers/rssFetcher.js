@@ -71,17 +71,39 @@ const SOURCES = [
 
 const KEYWORDS = ['náutico', 'nautico', 'timbu', 'capibaribe', 'série b', 'serie b'];
 
-// Domínios que podemos acessar para og:image (sem bloqueio anti-bot)
-const ALLOWED_IMAGE_DOMAINS = [
-  'gazetaesportiva.com',
-  'folhape.com.br',
-  'esportesdp.com.br',
-  'torcedores.com',
-  'ne10.uol.com.br',
-  'diariodepernambuco.com.br',
-  'lance.com.br',
-  'uol.com.br',
-];
+// Logos dos veículos de imprensa — fallback quando sem imagem no RSS
+const SOURCE_LOGOS = {
+  'Globo Esporte':    'https://s.glbimg.com/es/ge/f/original/2013/07/04/ge_logo.png',
+  'ge.globo.com':     'https://s.glbimg.com/es/ge/f/original/2013/07/04/ge_logo.png',
+  'NE10':             'https://ne10.uol.com.br/favicon.ico',
+  'ne10.uol.com.br':  'https://ne10.uol.com.br/favicon.ico',
+  'Lance!':           'https://www.lance.com.br/favicon.ico',
+  'lance.com.br':     'https://www.lance.com.br/favicon.ico',
+  'Folha de Pernambuco': 'https://www.folhape.com.br/favicon.ico',
+  'folhape.com.br':   'https://www.folhape.com.br/favicon.ico',
+  'Diário de Pernambuco': 'https://www.diariodepernambuco.com.br/favicon.ico',
+  'Torcedores':       'https://www.torcedores.com/favicon.ico',
+  'torcedores.com':   'https://www.torcedores.com/favicon.ico',
+  'UOL Esporte':      'https://conteudo.imguol.com.br/c/esporte/layout/1.0/img/uol-esporte-share.png',
+  'uol.com.br':       'https://conteudo.imguol.com.br/c/esporte/layout/1.0/img/uol-esporte-share.png',
+};
+
+// Imagem padrão do Náutico para quando não há logo da fonte
+const NAUTICO_DEFAULT_IMAGE = 'https://s.sde.globo.com/media/organizations/2019/01/03/Nautico.svg';
+
+function getSourceLogo(sourceName) {
+  if (!sourceName) return NAUTICO_DEFAULT_IMAGE;
+  // Tenta match exato
+  if (SOURCE_LOGOS[sourceName]) return SOURCE_LOGOS[sourceName];
+  // Tenta match parcial (domínio dentro do nome)
+  for (const [key, url] of Object.entries(SOURCE_LOGOS)) {
+    if (sourceName.toLowerCase().includes(key.toLowerCase()) ||
+        key.toLowerCase().includes(sourceName.toLowerCase())) {
+      return url;
+    }
+  }
+  return NAUTICO_DEFAULT_IMAGE;
+}
 
 // ─── fetchAll ──────────────────────────────────────────────────
 async function fetchAll() {
@@ -96,12 +118,19 @@ async function fetchAll() {
     }
   });
 
-  // Busca imagens para itens sem imagem cujo domínio é acessível
-  const semImagem = items.filter(i => !i.image && canFetchImage(i.link));
-  if (semImagem.length > 0) {
-    console.log(`  Buscando og:image para ${semImagem.length} itens...`);
-    await processInBatches(semImagem, 10, item => fetchOgImage(item));
-    console.log(`  Com imagem: ${items.filter(i => i.image).length}/${items.length}`);
+  // Para fontes diretas (não Google News) com logo de fallback,
+  // tenta buscar a imagem real da página do artigo
+  const candidatos = items.filter(i =>
+    i.image &&
+    (i.image.includes('favicon') || i.image.includes('Nautico.svg')) &&
+    i.link &&
+    !i.link.includes('google.com')
+  );
+
+  if (candidatos.length > 0) {
+    console.log(`  Melhorando imagens para ${candidatos.length} itens...`);
+    await processInBatches(candidatos, 8, item => fetchOgImage(item));
+    console.log(`  Com imagem real: ${items.filter(i => i.image && !i.image.includes('favicon') && !i.image.includes('Nautico.svg')).length}/${items.length}`);
   }
 
   return items;
@@ -132,16 +161,18 @@ async function fetchOne(source) {
     // a URL real a partir do campo source.url ou do conteúdo do item
     let link = entry.link || entry.guid || '';
     if (source.isGoogleNews) {
-      // Tenta extrair a URL original do item do Google News
       const realUrl = extractRealUrlFromGoogleNews(entry);
       if (realUrl) link = realUrl;
     }
+
+    // Tenta pegar imagem do RSS; se não tiver, usa logo do veículo
+    const imageFromRss = extractImageFromEntry(entry);
 
     items.push({
       title,
       link,
       description: cleanHtml(entry.contentSnippet || ''),
-      image:       extractImageFromEntry(entry),
+      image:       imageFromRss || getSourceLogo(sourceName),
       date:        entry.isoDate || null,
       source:      sourceName,
       color:       source.color,
@@ -177,19 +208,13 @@ function extractRealUrlFromGoogleNews(entry) {
 
 // ─── Busca og:image da URL real ────────────────────────────────
 async function fetchOgImage(item) {
-  if (!item.link || !canFetchImage(item.link)) return;
+  if (!item.link || item.link.includes('google.com')) return;
   try {
     const html = await fetchHead(item.link, 12000, 8000);
     if (!html) return;
     const image = extractOgImage(html);
     if (image) item.image = image;
   } catch (_) {}
-}
-
-function canFetchImage(url) {
-  if (!url) return false;
-  if (url.includes('google.com')) return false; // Google News links não funcionam
-  return ALLOWED_IMAGE_DOMAINS.some(d => url.includes(d));
 }
 
 /**
