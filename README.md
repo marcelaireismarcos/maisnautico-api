@@ -51,10 +51,12 @@ Agora, no seu computador, abra o terminal na pasta `server` deste projeto:
 ```bash
 cd d:\Android\Noticias\MaisNautico\server
 git init
+git config --global user.email "marcelaireismarcos@gmail.com"
+git config --global user.name "marcelaireismarcos"
 git add .
 git commit -m "Initial commit"
 git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/maisnautico-api.git
+git remote add origin https://github.com/marcelaireismarcos/maisnautico-api.git
 git push -u origin main
 ```
 

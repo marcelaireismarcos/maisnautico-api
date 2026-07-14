@@ -4,13 +4,36 @@ const NodeCache = require('node-cache');
 const rssFetcher = require('./fetchers/rssFetcher');
 
 const app   = express();
-const cache = new NodeCache({ stdTTL: 600 }); // cache 10 minutos
+const cache = new NodeCache({ stdTTL: 60 }); // cache 1 minuto (temporário para debug)
 
 app.use(cors());
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Debug: mostra primeiros 3 itens de cada fonte com campo image
+app.get('/debug', async (req, res) => {
+  const rssFetcher = require('./fetchers/rssFetcher');
+  try {
+    const items = await rssFetcher.fetchAll();
+    // Agrupa por fonte, mostra só title + image + link
+    const bySource = {};
+    items.forEach(i => {
+      if (!bySource[i.source]) bySource[i.source] = [];
+      if (bySource[i.source].length < 3) {
+        bySource[i.source].push({
+          title: i.title,
+          image: i.image,
+          link:  i.link ? i.link.substring(0, 80) : null,
+        });
+      }
+    });
+    res.json(bySource);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Endpoint de notícias
