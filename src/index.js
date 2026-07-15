@@ -10,7 +10,17 @@ app.use(cors());
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    cache_keys: cache.keys().length
+  });
+});
+
+// Limpa o cache (útil após deploy)
+app.get('/cache/clear', (req, res) => {
+  cache.flushAll();
+  res.json({ ok: true, message: 'Cache limpo' });
 });
 
 // Debug: mostra primeiros 3 itens de cada fonte com campo image
