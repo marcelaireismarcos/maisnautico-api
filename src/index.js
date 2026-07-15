@@ -4,7 +4,7 @@ const NodeCache = require('node-cache');
 const rssFetcher = require('./fetchers/rssFetcher');
 
 const app   = express();
-const cache = new NodeCache({ stdTTL: 60 }); // cache 1 minuto (temporário para debug)
+const cache = new NodeCache({ stdTTL: 600 }); // cache 10 minutos
 
 app.use(cors());
 
