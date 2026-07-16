@@ -1,10 +1,11 @@
 const express   = require('express');
 const cors      = require('cors');
 const NodeCache = require('node-cache');
-const rssFetcher = require('./fetchers/rssFetcher');
+const rssFetcher    = require('./fetchers/rssFetcher');
+const outrasFetcher = require('./fetchers/outrasFetcher');
 
 const app   = express();
-const cache = new NodeCache({ stdTTL: 600 }); // cache 10 minutos
+const cache = new NodeCache({ stdTTL: 300 }); // cache 5 minutos
 
 app.use(cors());
 
@@ -46,7 +47,7 @@ app.get('/debug', async (req, res) => {
   }
 });
 
-// Endpoint de notícias
+// Endpoint de notícias do Náutico
 app.get('/noticias', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 50, 100);
 
@@ -80,6 +81,41 @@ app.get('/noticias', async (req, res) => {
 
   } catch (err) {
     console.error('[erro]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Endpoint: Outras notícias (futebol geral, sem Náutico) ───
+app.get('/outras-noticias', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+
+  const cached = cache.get('outras-noticias');
+  if (cached) {
+    return res.json(cached.slice(0, limit));
+  }
+
+  try {
+    const items = await outrasFetcher.fetchAll();
+
+    const seen   = new Set();
+    const unique = items.filter(item => {
+      if (!item.link || seen.has(item.link)) return false;
+      seen.add(item.link);
+      return true;
+    });
+
+    unique.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return new Date(b.date) - new Date(a.date);
+    });
+
+    cache.set('outras-noticias', unique);
+    console.log(`[ok] ${unique.length} outras notícias`);
+    res.json(unique.slice(0, limit));
+
+  } catch (err) {
+    console.error('[erro outras]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
