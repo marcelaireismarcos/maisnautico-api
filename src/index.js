@@ -1,13 +1,59 @@
+// Polyfill Promise.allSettled para Node.js < 12
+if (!Promise.allSettled) {
+  Promise.allSettled = function(promises) {
+    return Promise.all(promises.map(function(p) {
+      return p
+        .then(function(value) { return { status: 'fulfilled', value: value }; })
+        .catch(function(reason) { return { status: 'rejected', reason: reason }; });
+    }));
+  };
+}
+
 const express   = require('express');
 const cors      = require('cors');
 const NodeCache = require('node-cache');
 const rssFetcher    = require('./fetchers/rssFetcher');
 const outrasFetcher = require('./fetchers/outrasFetcher');
+const newsScraper   = require('./fetchers/newsScraper');
 
 const app   = express();
 const cache = new NodeCache({ stdTTL: 300 }); // cache 5 minutos
 
 app.use(cors());
+
+// ─── Helpers ──────────────────────────────────────────────────
+const STOP_WORDS = new Set(['o', 'a', 'os', 'as', 'de', 'do', 'da', 'dos', 'das',
+  'em', 'no', 'na', 'nos', 'nas', 'que', 'e', 'para', 'por', 'com',
+  'um', 'uma', 'ao', 'aos', 'pelo', 'pela', 'se', 'mas', 'ou']);
+
+/** Fingerprint agressivo: remove acentos, stop words, pega 5 palavras significativas */
+function titleFingerprint(title) {
+  if (!title) return '';
+  const s = title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const words = s.split(' ').filter(w => w && !STOP_WORDS.has(w));
+  return words.slice(0, 5).join(' ');
+}
+
+/** Deduplica por link E por fingerprint do título */
+function deduplicate(items) {
+  const seenLinks = new Set();
+  const seenFingerprints = new Set();
+  return items.filter(item => {
+    const linkKey = item.link || '';
+    const titleKey = titleFingerprint(item.title);
+    if (titleKey && seenFingerprints.has(titleKey)) return false;
+    if (linkKey && seenLinks.has(linkKey)) return false;
+    if (linkKey) seenLinks.add(linkKey);
+    if (titleKey) seenFingerprints.add(titleKey);
+    return true;
+  });
+}
 
 // Health check
 app.get('/health', (req, res) => {
@@ -47,7 +93,7 @@ app.get('/debug', async (req, res) => {
   }
 });
 
-// Endpoint de notícias do Náutico
+// Endpoint de notícias do Vitória-BA
 app.get('/noticias', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 50, 100);
 
@@ -58,15 +104,20 @@ app.get('/noticias', async (req, res) => {
   }
 
   try {
-    const items = await rssFetcher.fetchAll();
+    // RSS + Scrapers em paralelo
+    const [rssItems, scrapedItems] = await Promise.allSettled([
+      rssFetcher.fetchAll(),
+      newsScraper.fetchAll(),
+    ]);
 
-    // Deduplica por link
-    const seen   = new Set();
-    const unique = items.filter(item => {
-      if (!item.link || seen.has(item.link)) return false;
-      seen.add(item.link);
-      return true;
-    });
+    let items = [];
+    if (rssItems.status === 'fulfilled') items.push(...rssItems.value);
+    if (scrapedItems.status === 'fulfilled') items.push(...scrapedItems.value);
+
+    console.log(`[merge] RSS: ${rssItems.status === 'fulfilled' ? rssItems.value.length : 0} itens, Scrapers: ${scrapedItems.status === 'fulfilled' ? scrapedItems.value.length : 0} itens`);
+
+    // Deduplica por link E título
+    const unique = deduplicate(items);
 
     // Ordena por data
     unique.sort((a, b) => {
@@ -85,7 +136,7 @@ app.get('/noticias', async (req, res) => {
   }
 });
 
-// ─── Endpoint: Outras notícias (futebol geral, sem Náutico) ───
+// ─── Endpoint: Outras notícias (futebol geral, sem Vitória-BA) ───
 app.get('/outras-noticias', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 50, 100);
 
@@ -97,12 +148,8 @@ app.get('/outras-noticias', async (req, res) => {
   try {
     const items = await outrasFetcher.fetchAll();
 
-    const seen   = new Set();
-    const unique = items.filter(item => {
-      if (!item.link || seen.has(item.link)) return false;
-      seen.add(item.link);
-      return true;
-    });
+    // Deduplica por link E título
+    const unique = deduplicate(items);
 
     unique.sort((a, b) => {
       if (!a.date) return 1;
@@ -122,5 +169,5 @@ app.get('/outras-noticias', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Mais Náutico API na porta ${PORT}`);
+  console.log(`Mais Vitória-BA API na porta ${PORT}`);
 });

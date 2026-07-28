@@ -18,7 +18,7 @@ const parser = new Parser({
   },
 });
 
-// ─── Fontes de futebol GERAL (sem foco no Náutico) ────────────
+// ─── Fontes de futebol GERAL (sem foco no Vitória-BA) ────────────
 const SOURCES = [
   // Brasileirão Série A
   {
@@ -49,13 +49,17 @@ const SOURCES = [
     name:  'Futebol',
     url:   'https://www.gazetaesportiva.com/feed/',
     color: '#E65100',
-    filter: true, // filtra para excluir notícias do Náutico
+    filter: true, // filtra para excluir notícias do Vitória-BA
   },
 ];
 
-// Palavras-chave que identificam notícias do NÁUTICO (para excluir)
-const NAUTICO_KEYWORDS = [
-  'náutico', 'nautico', 'timbu', 'capibaribe', 'aflitos'
+// Palavras-chave que identificam notícias do VITÓRIA-BA (para excluir)
+const VITORIA_BA_KEYWORDS = [
+  'vitória-ba', 'vitoria-ba', 'vitória ba', 'vitoria ba',
+  'vitória da bahia', 'vitoria da bahia',
+  'leão da barra', 'leao da barra',
+  'ec vitória', 'ec vitoria',
+  'barradão', 'barradao'
 ];
 
 // ─── fetchAll ──────────────────────────────────────────────────
@@ -72,18 +76,16 @@ async function fetchAll() {
     }
   });
 
-  // Busca og:image para itens sem imagem com link real
+  // Busca og:image para itens sem imagem (inclui Google News)
   const withoutImage = items.filter(i =>
-    !i.image && i.link && !i.link.includes('news.google.com')
+    !i.image && i.link
   );
   if (withoutImage.length > 0) {
     await processInBatches(withoutImage, 6, fetchOgImage);
   }
 
-  // Fallback de imagem para itens que ainda não têm
-  items.filter(i => !i.image).forEach(i => {
-    i.image = getSourceImage(i.source);
-  });
+  // Sem fallback de imagem — adapter esconde thumbnails de fallback.
+  // Apenas itens com imagem real do RSS ou og:image serão exibidos.
 
   return items;
 }
@@ -107,12 +109,12 @@ async function fetchOne(source) {
       sourceName = rawTitle.substring(idx + 3).trim();
     }
 
-    // Exclui notícias do Náutico — já aparecem no feed principal
+    // Exclui notícias do Vitória-BA — já aparecem no feed principal
     const combined = (title + ' ' + (entry.contentSnippet || '')).toLowerCase();
-    if (isNauticoNews(combined)) continue;
+    if (isVitoriaBANews(combined)) continue;
 
     // Filtro adicional para fontes com flag filter
-    if (source.filter && isNauticoNews(combined)) continue;
+    if (source.filter && isVitoriaBANews(combined)) continue;
 
     const image = extractImageFromEntry(entry);
     const link  = entry.link || entry.guid || '';
@@ -131,14 +133,15 @@ async function fetchOne(source) {
   return items;
 }
 
-// ─── Verifica se é notícia do Náutico ─────────────────────────
-function isNauticoNews(text) {
-  return NAUTICO_KEYWORDS.some(kw => text.includes(kw));
+// ─── Verifica se é notícia do Vitória-BA ─────────────────────────
+function isVitoriaBANews(text) {
+  return VITORIA_BA_KEYWORDS.some(kw => text.includes(kw));
 }
 
 // ─── Busca og:image ───────────────────────────────────────────
 async function fetchOgImage(item) {
-  if (!item.link || item.link.includes('google.com')) return;
+  if (!item.link) return;
+  // Google News links redirecionam para o artigo real — fetchHtmlHead segue o redirect
   try {
     const html = await fetchHtmlHead(item.link, 10000, 7000);
     if (!html) return;
@@ -153,13 +156,13 @@ async function fetchOgImage(item) {
 
 // ─── Imagens fallback por fonte ───────────────────────────────
 const SOURCE_IMAGES = {
-  'Globo Esporte': 'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/03/Nautico.svg',
+  'Globo Esporte': 'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/vitoria-escudo.svg',
   'ESPN Brasil':   'https://a1.espncdn.com/combiner/i?img=%2Fi%2Fespn%2Fespn_logos%2Fespn_red.png&w=1200&h=630&scale=crop&cquality=40&location=origin',
   'Lance!':        'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'LANCE!':        'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'CNN Brasil':    'https://conteudo.imguol.com.br/c/esporte/layout/1.0/img/uol-esporte-share.png',
 };
-const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Campoalegre.jpg/320px-Campoalegre.jpg';
+const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Escudo_EC_Vitoria.svg/200px-Escudo_EC_Vitoria.svg.png';
 
 function getSourceImage(sourceName) {
   if (!sourceName) return DEFAULT_IMAGE;

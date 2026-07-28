@@ -1,3 +1,14 @@
+// Polyfill Promise.allSettled para Node.js < 12
+if (!Promise.allSettled) {
+  Promise.allSettled = function(promises) {
+    return Promise.all(promises.map(function(p) {
+      return p
+        .then(function(value) { return { status: 'fulfilled', value: value }; })
+        .catch(function(reason) { return { status: 'rejected', reason: reason }; });
+    }));
+  };
+}
+
 const Parser = require('rss-parser');
 const https  = require('https');
 const http   = require('http');
@@ -23,49 +34,93 @@ const parser = new Parser({
 
 // ─── Fontes RSS ────────────────────────────────────────────────
 const SOURCES = [
-  // RSS diretos com imagem no feed (WordPress inclui imagem automaticamente)
+  // ── FEEDS RSS DIRETOS (com imagem) ──────────────────────────
   {
     name:   'Gazeta Esportiva',
-    url:    'https://www.gazetaesportiva.com/tag/nautico/feed/',
+    url:    'https://www.gazetaesportiva.com/tag/vitoria-ba/feed/',
     color:  '#C8102E',
     filter: false,
   },
   {
-    name:   'Gazeta — Série B',
-    url:    'https://www.gazetaesportiva.com/tag/brasileirao-serie-b/feed/',
-    color:  '#0066CC',
-    filter: true,
-  },
-  {
-    name:   'Torcedores',
-    url:    'https://www.torcedores.com/feed/nautico',
-    color:  '#E65100',
+    name:   'Arena Rubro-Negra',
+    url:    'https://arenarubronegra.com/feed/',
+    color:  '#C8102E',
     filter: false,
   },
   {
-    name:   'Folha PE',
-    url:    'https://www.folhape.com.br/rss/esportes/',
-    color:  '#880E4F',
+    name:   'Futebol Baiano',
+    url:    'https://futebolbaiano.com.br/feed',
+    color:  '#008000',
     filter: true,
   },
-  // Google News — muitas fontes, sem imagem direta — usamos com logo fallback
+  // ── RSS de portais baianos (testados, 0 resultados — feeds gerais sem esporte)
+  // Correio 24h e iBahia removidos — feeds gerais, sem notícias do Vitória
+  // ── GOOGLE NEWS (consultas existentes) ──────────────────────
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=%22N%C3%A1utico+Capibaribe%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    url:          'https://news.google.com/rss/search?q=%22Vit%C3%B3ria-BA%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
     color:        '#C8102E',
     filter:       false,
     isGoogleNews: true,
   },
   {
-    name:         'Google News — Série B',
-    url:          'https://news.google.com/rss/search?q=Nautico+%22Serie+B%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#0066CC',
+    name:         'Google News',
+    url:          'https://news.google.com/rss/search?q=%22Esporte+Clube+Vit%C3%B3ria%22+BA&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#C8102E',
+    filter:       false,
+    isGoogleNews: true,
+  },
+  {
+    name:         'Google News',
+    url:          'https://news.google.com/rss/search?q=%22Vit%C3%B3ria+da+Bahia%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#C8102E',
+    filter:       false,
+    isGoogleNews: true,
+  },
+  // ── NOVAS CONSULTAS GOOGLE NEWS ────────────────────────────
+  {
+    name:         'Google News',
+    url:          'https://news.google.com/rss/search?q=Vit%C3%B3ria+BA+S%C3%A9rie+A&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#C8102E',
+    filter:       false,
+    isGoogleNews: true,
+  },
+  {
+    name:         'Google News',
+    url:          'https://news.google.com/rss/search?q=%22Le%C3%A3o+da+Barra%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#C8102E',
+    filter:       false,
+    isGoogleNews: true,
+  },
+  {
+    name:         'Google News',
+    url:          'https://news.google.com/rss/search?q=Vit%C3%B3ria+BA+futebol+not%C3%ADcias&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#C8102E',
+    filter:       false,
+    isGoogleNews: true,
+  },
+  {
+    name:         'Google News',
+    url:          'https://news.google.com/rss/search?q=%22EC+Vit%C3%B3ria%22+futebol+2026&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#C8102E',
+    filter:       false,
+    isGoogleNews: true,
+  },
+  {
+    name:         'Google News',
+    url:          'https://news.google.com/rss/search?q=%22Barrad%C3%A3o%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#C8102E',
     filter:       false,
     isGoogleNews: true,
   },
 ];
 
-const KEYWORDS = ['náutico', 'nautico', 'timbu', 'capibaribe', 'série b', 'serie b'];
+const KEYWORDS = ['vitória-ba', 'vitoria-ba', 'vitória da bahia', 'vitoria da bahia', 
+  'leão da barra', 'leao da barra', 'ec vitória', 'ec vitoria', 
+  'barradão', 'barradao', 'esporte clube vitória', 'esporte clube vitoria', 
+  'arena rubro-negra', 'arenarubronegra', 'vitoria ba', 'vitória ba',
+  'e.c. vitória', 'e.c. vitoria', 'rubro-negro baiano', 'leão',
+  'vitoria da bahia', 'vitória da bahia', 'leao da barra', 'leão da barra'];
 
 // ─── fetchAll ──────────────────────────────────────────────────
 async function fetchAll() {
@@ -77,28 +132,26 @@ async function fetchAll() {
       console.log(`  [${SOURCES[i].name}] ${r.value.length} itens, com imagem: ${r.value.filter(x => x.image).length}`);
       items.push(...r.value);
     } else {
-      console.warn(`  [${SOURCES[i].name}] falhou: ${r.reason?.message}`);
+      console.warn('  [' + SOURCES[i].name + '] falhou: ' + (r.reason && r.reason.message));
     }
   });
 
-  // Para itens sem imagem com link real (não Google News),
-  // tenta buscar og:image da página do artigo
+  // Para itens sem imagem, tenta buscar og:image da página do artigo.
+  // PULA itens do Google News (links de redirect, og:image raramente funciona
+  // e o fetch é muito lento — centenas de requests).
   const withoutImage = items.filter(i =>
-    !i.image &&
-    i.link &&
-    !i.link.includes('news.google.com')
+    !i.image && i.link && !i.link.startsWith('https://news.google.com')
   );
 
-  if (withoutImage.length > 0) {
+  if (withoutImage.length > 100) {
+    console.log(`  og:image: ${withoutImage.length} itens elegiveis (limitado a 50 para performance)`);
+    await processInBatches(withoutImage.slice(0, 50), 6, fetchOgImage);
+  } else if (withoutImage.length > 0) {
     console.log(`  Buscando og:image para ${withoutImage.length} itens...`);
-    await processInBatches(withoutImage, 8, fetchOgImage);
-    console.log(`  Com imagem após og:image: ${items.filter(x => x.image).length}/${items.length}`);
+    await processInBatches(withoutImage, 6, fetchOgImage);
   }
 
-  // Itens do Google News sem imagem: usa imagem baseada no nome da fonte
-  items.filter(i => !i.image).forEach(i => {
-    i.image = getSourceImage(i.source);
-  });
+  console.log(`  Com imagem: ${items.filter(x => x.image).length}/${items.length}`);
 
   return items;
 }
@@ -146,22 +199,22 @@ function extractImageFromEntry(entry) {
   // 1. media:content
   const mc = entry.mediaContent;
   if (mc) {
-    const url = mc?.['$']?.url || mc?.url;
+    const url = (mc && mc['$'] && mc['$'].url) || (mc && mc.url);
     if (url && isValidImage(url)) return url;
   }
 
   // 2. media:thumbnail
   const mt = entry.mediaThumbnail;
   if (mt) {
-    const url = mt?.['$']?.url || mt?.url;
+    const url = (mt && mt['$'] && mt['$'].url) || (mt && mt.url);
     if (url && isValidImage(url)) return url;
   }
 
   // 3. enclosure (WordPress usa isso para imagem em destaque)
   const enc = entry.enclosure;
   if (enc) {
-    const url = enc?.url || enc?.['$']?.url;
-    const type = enc?.type || enc?.['$']?.type || '';
+    const url = (enc && enc.url) || (enc && enc['$'] && enc['$'].url);
+    const type = (enc && enc.type) || (enc && enc['$'] && enc['$'].type) || '';
     if (url && (type.startsWith('image') || isImageUrl(url)) && isValidImage(url)) {
       return url;
     }
@@ -186,7 +239,8 @@ function extractImageFromEntry(entry) {
 
 // ─── Busca og:image da URL do artigo ──────────────────────────
 async function fetchOgImage(item) {
-  if (!item.link || item.link.includes('google.com')) return;
+  if (!item.link) return;
+  // Google News links redirecionam para o artigo real — fetchHtmlHead segue o redirect
   try {
     const html = await fetchHtmlHead(item.link, 10000, 7000);
     if (!html) return;
@@ -206,17 +260,16 @@ async function fetchOgImage(item) {
 // ─── Imagens de fallback por fonte ────────────────────────────
 // Imagens reais e em tamanho adequado — não favicons
 const SOURCE_IMAGES = {
-  'GE':               'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/03/Nautico.svg',
-  'Globo Esporte':    'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/03/Nautico.svg',
-  'JC':               'https://jc.ne10.uol.com.br/img/logo-jc.png',
+  'GE':               'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/vitoria-escudo.svg',
+  'Globo Esporte':    'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/vitoria-escudo.svg',
   'Lance!':           'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'LANCE!':           'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'ESPN Brasil':      'https://a1.espncdn.com/combiner/i?img=%2Fi%2Fespn%2Fespn_logos%2Fespn_red.png&w=1200&h=630&scale=crop&cquality=40&location=origin',
   'CNN Brasil':       'https://conteudo.imguol.com.br/c/esporte/layout/1.0/img/uol-esporte-share.png',
 };
 
-// Imagem padrão: escudo do Náutico (SVG via Globo CDN — funciona como imagem)
-const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Clube_N%C3%A1utico_Capibaribe.svg/200px-Clube_N%C3%A1utico_Capibaribe.svg.png';
+// Imagem padrão: escudo do Vitória-BA
+const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Escudo_EC_Vitoria.svg/200px-Escudo_EC_Vitoria.svg.png';
 
 function getSourceImage(sourceName) {
   if (!sourceName) return DEFAULT_IMAGE;
