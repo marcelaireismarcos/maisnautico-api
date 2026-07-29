@@ -36,91 +36,72 @@ const parser = new Parser({
 const SOURCES = [
   // ── FEEDS RSS DIRETOS (com imagem) ──────────────────────────
   {
-    name:   'Gazeta Esportiva',
-    url:    'https://www.gazetaesportiva.com/tag/vitoria-ba/feed/',
-    color:  '#C8102E',
+    name:   'GE Fluminense',
+    url:    'https://ge.globo.com/rj/futebol/times/fluminense/feed/',
+    color:  '#9E1B32',
     filter: false,
   },
   {
-    name:   'Arena Rubro-Negra',
-    url:    'https://arenarubronegra.com/feed/',
-    color:  '#C8102E',
+    name:   'Lance!',
+    url:    'https://www.lance.com.br/feed/',
+    color:  '#FF6F00',
     filter: false,
   },
-  {
-    name:   'Futebol Baiano',
-    url:    'https://futebolbaiano.com.br/feed',
-    color:  '#008000',
-    filter: true,
-  },
-  // ── RSS de portais baianos (testados, 0 resultados — feeds gerais sem esporte)
-  // Correio 24h e iBahia removidos — feeds gerais, sem notícias do Vitória
-  // ── GOOGLE NEWS (consultas existentes) ──────────────────────
+  // ── GOOGLE NEWS ────────────────────────────────────────────
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=%22Vit%C3%B3ria-BA%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
+    url:          'https://news.google.com/rss/search?q=Fluminense+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#9E1B32',
     filter:       false,
     isGoogleNews: true,
   },
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=%22Esporte+Clube+Vit%C3%B3ria%22+BA&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
+    url:          'https://news.google.com/rss/search?q=%22Fluminense+FC%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#9E1B32',
     filter:       false,
     isGoogleNews: true,
   },
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=%22Vit%C3%B3ria+da+Bahia%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
-    filter:       false,
-    isGoogleNews: true,
-  },
-  // ── NOVAS CONSULTAS GOOGLE NEWS ────────────────────────────
-  {
-    name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=Vit%C3%B3ria+BA+S%C3%A9rie+A&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
+    url:          'https://news.google.com/rss/search?q=%22Tricolor+Carioca%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#006442',
     filter:       false,
     isGoogleNews: true,
   },
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=%22Le%C3%A3o+da+Barra%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
+    url:          'https://news.google.com/rss/search?q=%22EC+Fluminense%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#9E1B32',
     filter:       false,
     isGoogleNews: true,
   },
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=Vit%C3%B3ria+BA+futebol+not%C3%ADcias&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
+    url:          'https://news.google.com/rss/search?q=Fluminense+not%C3%ADcias+2026&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#9E1B32',
     filter:       false,
     isGoogleNews: true,
   },
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=%22EC+Vit%C3%B3ria%22+futebol+2026&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
+    url:          'https://news.google.com/rss/search?q=site:uol.com.br+fluminense&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#9E1B32',
     filter:       false,
     isGoogleNews: true,
   },
   {
     name:         'Google News',
-    url:          'https://news.google.com/rss/search?q=%22Barrad%C3%A3o%22+futebol&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
-    color:        '#C8102E',
+    url:          'https://news.google.com/rss/search?q=site:ge.globo.com+fluminense&hl=pt-BR&gl=BR&ceid=BR%3Apt-419',
+    color:        '#006442',
     filter:       false,
     isGoogleNews: true,
   },
 ];
 
-const KEYWORDS = ['vitória-ba', 'vitoria-ba', 'vitória da bahia', 'vitoria da bahia', 
-  'leão da barra', 'leao da barra', 'ec vitória', 'ec vitoria', 
-  'barradão', 'barradao', 'esporte clube vitória', 'esporte clube vitoria', 
-  'arena rubro-negra', 'arenarubronegra', 'vitoria ba', 'vitória ba',
-  'e.c. vitória', 'e.c. vitoria', 'rubro-negro baiano', 'leão',
-  'vitoria da bahia', 'vitória da bahia', 'leao da barra', 'leão da barra'];
+const KEYWORDS = ['fluminense', 'flu', 'tricolor carioca', 'ec fluminense',
+  'fluminense fc', 'nense', 'laranjeiras', 'tricolor das laranjeiras',
+  'fluminense futebol', 'fluminense fc', 'fluzão', 'flusao'];
 
 // ─── fetchAll ──────────────────────────────────────────────────
 async function fetchAll() {
@@ -152,6 +133,10 @@ async function fetchAll() {
   }
 
   console.log(`  Com imagem: ${items.filter(x => x.image).length}/${items.length}`);
+
+  // Itens sem imagem: o app já tem OgImageLoader que busca og:image
+  // em background quando o card é exibido. Não usamos fallback aqui
+  // porque imagens repetitivas (escudo) poluem o visual.
 
   return items;
 }
@@ -260,16 +245,17 @@ async function fetchOgImage(item) {
 // ─── Imagens de fallback por fonte ────────────────────────────
 // Imagens reais e em tamanho adequado — não favicons
 const SOURCE_IMAGES = {
-  'GE':               'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/vitoria-escudo.svg',
-  'Globo Esporte':    'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/vitoria-escudo.svg',
+  'GE':               'https://s2-ge.glbimg.com/-6v-8m8PJRH6I6Gm3H6cYHzP7hU=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/fluminense-escudo.svg',
+  'Globo Esporte':    'https://s2-ge.glbimg.com/-6v-8m8PJRH6I6Gm3H6cYHzP7hU=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/fluminense-escudo.svg',
+  'GE Fluminense':    'https://s2-ge.glbimg.com/-6v-8m8PJRH6I6Gm3H6cYHzP7hU=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/fluminense-escudo.svg',
   'Lance!':           'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'LANCE!':           'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'ESPN Brasil':      'https://a1.espncdn.com/combiner/i?img=%2Fi%2Fespn%2Fespn_logos%2Fespn_red.png&w=1200&h=630&scale=crop&cquality=40&location=origin',
   'CNN Brasil':       'https://conteudo.imguol.com.br/c/esporte/layout/1.0/img/uol-esporte-share.png',
 };
 
-// Imagem padrão: escudo do Vitória-BA
-const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Escudo_EC_Vitoria.svg/200px-Escudo_EC_Vitoria.svg.png';
+// Imagem padrão: escudo do Fluminense
+const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Fluminense_FC_crest.svg/200px-Fluminense_FC_crest.svg.png';
 
 function getSourceImage(sourceName) {
   if (!sourceName) return DEFAULT_IMAGE;
@@ -316,7 +302,17 @@ function fetchHtmlHead(url, maxBytes, timeout, depth = 0) {
 
 function isRelevant(text) {
   const lower = text.toLowerCase();
-  return KEYWORDS.some(kw => lower.includes(kw));
+  // "flu" precisa de boundaries para evitar matches parciais (fluxo, fluido, influência)
+  const withBoundaries = lower
+    .replace(/flu/g, ' flu ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return KEYWORDS.some(kw => {
+    if (kw === 'flu') {
+      return withBoundaries.includes(' flu ') || withBoundaries.startsWith('flu ');
+    }
+    return lower.includes(kw);
+  });
 }
 
 function isValidImage(url) {

@@ -18,7 +18,7 @@ const parser = new Parser({
   },
 });
 
-// ─── Fontes de futebol GERAL (sem foco no Vitória-BA) ────────────
+// ─── Fontes de futebol GERAL (sem foco no Fluminense) ────────────
 const SOURCES = [
   // Brasileirão Série A
   {
@@ -49,17 +49,19 @@ const SOURCES = [
     name:  'Futebol',
     url:   'https://www.gazetaesportiva.com/feed/',
     color: '#E65100',
-    filter: true, // filtra para excluir notícias do Vitória-BA
+    filter: true, // filtra para excluir notícias do Fluminense
   },
 ];
 
-// Palavras-chave que identificam notícias do VITÓRIA-BA (para excluir)
-const VITORIA_BA_KEYWORDS = [
-  'vitória-ba', 'vitoria-ba', 'vitória ba', 'vitoria ba',
-  'vitória da bahia', 'vitoria da bahia',
-  'leão da barra', 'leao da barra',
-  'ec vitória', 'ec vitoria',
-  'barradão', 'barradao'
+// Palavras-chave que identificam notícias do FLUMINENSE (para excluir)
+const FLUMINENSE_KEYWORDS = [
+  'fluminense',
+  'flu',
+  'tricolor carioca',
+  'ec fluminense',
+  'fluminense fc',
+  'nense',
+  'laranjeiras'
 ];
 
 // ─── fetchAll ──────────────────────────────────────────────────
@@ -109,12 +111,9 @@ async function fetchOne(source) {
       sourceName = rawTitle.substring(idx + 3).trim();
     }
 
-    // Exclui notícias do Vitória-BA — já aparecem no feed principal
+    // Exclui notícias do Fluminense — já aparecem no feed principal
     const combined = (title + ' ' + (entry.contentSnippet || '')).toLowerCase();
-    if (isVitoriaBANews(combined)) continue;
-
-    // Filtro adicional para fontes com flag filter
-    if (source.filter && isVitoriaBANews(combined)) continue;
+    if (isFluminenseNews(combined)) continue;
 
     const image = extractImageFromEntry(entry);
     const link  = entry.link || entry.guid || '';
@@ -133,9 +132,9 @@ async function fetchOne(source) {
   return items;
 }
 
-// ─── Verifica se é notícia do Vitória-BA ─────────────────────────
-function isVitoriaBANews(text) {
-  return VITORIA_BA_KEYWORDS.some(kw => text.includes(kw));
+// ─── Verifica se é notícia do Fluminense ─────────────────────────
+function isFluminenseNews(text) {
+  return FLUMINENSE_KEYWORDS.some(kw => text.includes(kw));
 }
 
 // ─── Busca og:image ───────────────────────────────────────────
@@ -156,13 +155,13 @@ async function fetchOgImage(item) {
 
 // ─── Imagens fallback por fonte ───────────────────────────────
 const SOURCE_IMAGES = {
-  'Globo Esporte': 'https://s2-ge.glbimg.com/8YZ7shA-uHGoBhzwBPjp3w8bYh8=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/vitoria-escudo.svg',
+  'Globo Esporte': 'https://s2-ge.glbimg.com/-6v-8m8PJRH6I6Gm3H6cYHzP7hU=/1200x630/filters:quality(70)/https://s.sde.globo.com/media/organizations/2019/01/01/fluminense-escudo.svg',
   'ESPN Brasil':   'https://a1.espncdn.com/combiner/i?img=%2Fi%2Fespn%2Fespn_logos%2Fespn_red.png&w=1200&h=630&scale=crop&cquality=40&location=origin',
   'Lance!':        'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'LANCE!':        'https://www.lance.com.br/wp-content/uploads/2023/01/lance-og.jpg',
   'CNN Brasil':    'https://conteudo.imguol.com.br/c/esporte/layout/1.0/img/uol-esporte-share.png',
 };
-const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Escudo_EC_Vitoria.svg/200px-Escudo_EC_Vitoria.svg.png';
+const DEFAULT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Fluminense_FC_crest.svg/200px-Fluminense_FC_crest.svg.png';
 
 function getSourceImage(sourceName) {
   if (!sourceName) return DEFAULT_IMAGE;

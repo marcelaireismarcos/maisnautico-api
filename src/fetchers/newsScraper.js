@@ -20,85 +20,67 @@ if (!Promise.allSettled) {
 
 // ─── Configuração das fontes raspadas ──────────────────────────
 const SOURCES = [
-  // ── Futebol Bahiano ──────────────────────────────────────────
-  // Categoria "Esporte Clube Vitória" — 18+ notícias
+  // ── GE Fluminense ────────────────────────────────────────────
+  // Página de notícias do Fluminense no Globo Esporte
   {
-    name:   'Futebol Baiano',
-    url:    'https://futebolbahiano.org/esporte-clube-vitoria',
-    color:  '#008000',
+    name:   'GE Fluminense',
+    url:    'https://ge.globo.com/rj/futebol/times/fluminense/',
+    color:  '#9E1B32',
     selectors: {
-      container: 'a.home__post',
-      title:     'h3',
-      link:      null, // o container <a> já é o link
+      container: 'a.widget--card, .feed-post-body, .bastian-feed-item',
+      title:     '.feed-post-header-title, h2 a, .widget--card__title',
+      link:      null,
       image:     'img',
       imageAttr: 'src',
-      imageLazy: 'data-src',
+      imageLazy: 'data-src, data-original-src',
     },
   },
-  // ── Gazeta Esportiva — página do time ─────────────────────────
-  // Página principal que lista notícias do Vitória
-  // Estrutura: section.interna > ul > li.noticia > a (com título + img)
+  // ── Gazeta Esportiva — página do Fluminense ──────────────────
   {
     name:   'Gazeta Esportiva',
-    url:    'https://www.gazetaesportiva.com/times/vitoria/',
-    color:  '#C8102E',
+    url:    'https://www.gazetaesportiva.com/times/fluminense/',
+    color:  '#9E1B32',
     selectors: {
-      container: 'section.interna li.noticia',
-      title:     'a', // o link contém o texto do título
+      container: 'section.interna li.noticia, .lista-noticias article',
+      title:     'a',
       link:      'a',
       image:     'img',
       imageAttr: 'src',
       imageLazy: 'data-src',
     },
-    // Filtro: só links de artigos (não categorias, páginas internas)
     linkFilter: function(href) {
       if (!href) return false;
       return href.startsWith('https://www.gazetaesportiva.com/') && href.length > 60;
     },
-    // Filtro adicional por título: só notícias que mencionam Vitória
+    // Filtro por título: só notícias que mencionam Fluminense
     titleFilter: function(title) {
       if (!title) return false;
       var lower = title.toLowerCase();
-      return lower.indexOf('vitória') !== -1 || lower.indexOf('vitoria') !== -1
-          || lower.indexOf('ventura') !== -1 || lower.indexOf('leão') !== -1
-          || lower.indexOf('leao') !== -1 || lower.indexOf('barradão') !== -1
-          || lower.indexOf('barradao') !== -1 || lower.indexOf('rubro-negro') !== -1
-          || lower.indexOf('ecv') !== -1 || lower.indexOf('arcanjo') !== -1
-          || lower.indexOf('marinho') !== -1 || lower.indexOf('cantalapiedra') !== -1
-          || lower.indexOf('cacá') !== -1 || lower.indexOf('matheuzinho') !== -1
-          || lower.indexOf('remo') !== -1;
+      return lower.indexOf('fluminense') !== -1 || lower.indexOf('flu') !== -1
+          || lower.indexOf('tricolor') !== -1 || lower.indexOf('nense') !== -1
+          || lower.indexOf('laranjeiras') !== -1 || lower.indexOf('cano') !== -1
+          || lower.indexOf('ganso') !== -1 || lower.indexOf('arias') !== -1
+          || lower.indexOf('martinelli') !== -1 || lower.indexOf('andré') !== -1
+          || lower.indexOf('andre') !== -1 || lower.indexOf('kauã') !== -1
+          || lower.indexOf('kaua') !== -1 || lower.indexOf('mano') !== -1
+          || lower.indexOf('diniz') !== -1 || lower.indexOf('marcelo') !== -1
+          || lower.indexOf('felipe melo') !== -1 || lower.indexOf('gérson') !== -1
+          || lower.indexOf('german') !== -1 || lower.indexOf('costa') !== -1
+          || lower.indexOf('jhon') !== -1 || lower.indexOf('ariel') !== -1;
     },
   },
-  // ── Galaticos Online ─────────────────────────────────────────
-  // Atualmente offline (404), mas mantido para auto-recuperação
+  // ── Lance! Fluminense ────────────────────────────────────────
   {
-    name:   'Galáticos Online',
-    url:    'https://www.galaticosonline.com/noticias/vitoria.html',
-    color:  '#E65100',
+    name:   'Lance!',
+    url:    'https://www.lance.com.br/fluminense/',
+    color:  '#FF6F00',
     selectors: {
-      container: 'article, .post, .noticia, .card, li',
+      container: 'article, .post-item, .card-noticia',
       title:     'h2 a, h3 a, .title a',
       link:      null,
       image:     'img',
       imageAttr: 'src',
       imageLazy: 'data-src, data-lazy-src',
-    },
-    // Falha silenciosa se o site estiver offline
-  },
-  // ── Arena Rubro-Negra ────────────────────────────────────────
-  // Blog do Vitória (já tem RSS no rssFetcher, mas este é o
-  // complemento via scraping da página principal)
-  {
-    name:   'Arena Rubro-Negra',
-    url:    'https://arenarubronegra.com/',
-    color:  '#C8102E',
-    selectors: {
-      container: '.td_module_wrap, .td_block_inner .td-module-container',
-      title:     '.entry-title a',
-      link:      '.entry-title a',
-      image:     '.td-module-thumb img',
-      imageAttr: 'src',
-      imageLazy: 'data-img-url, data-src',
     },
   },
 ];
@@ -125,6 +107,9 @@ async function fetchAll() {
     await processInBatches(withoutImage, 6, fetchOgImage);
     console.log(`  [scraper] Com imagem após og:image: ${items.filter(x => x.image).length}/${items.length}`);
   }
+
+  // Itens sem imagem: NÃO usamos fallback. O app já busca og:image
+  // em background via OgImageLoader. Imagens repetitivas poluem o visual.
 
   return items;
 }
